@@ -1,0 +1,150 @@
+#parameterised for future change/updates
+class mysql($snort_archive	= 'snort-2.9.9.0.tar.gz',
+			$snort_folder	= 'snort-2.9.9.0',
+			$snort_daq		= 'daq-2.0.6.tar.gz',
+			$snort_daq_fol	= 'daq-2.0.6'){
+
+	Exec {
+		path	=>	['/usr/bin', '/usr/sbin', '/bin'],
+		returns =>	[0, 2, 14, 100],
+	}
+
+	#Making a /opt/snort firectory
+	exec { 'opt_dir' : 
+	command	=> 'mkdir -p /opt/snort',
+	}
+
+	#INSTALL DEPENDECIES
+	exec { 'install_dep' : 
+	command => 'sudo apt-get install -y ethtool build-essential libpcap-dev libpcre3-dev libdumbnet-dev bison flex zlib1g-dev liblzma-dev openssl libssl-dev',
+	require	=> Exec["opt_dir"],
+	}
+
+#FOLDER START	
+	# EXTRACT ARCHIVE
+	file {'/opt/snort/${snort_archive}' : 
+		ensure  => present,
+		source  => "puppet:///modules/snort/${snort_archive}",
+		require => Exec['install_dep'],
+	}
+
+	file {"/opt/snort/${snort_snort_daq}" : 
+		ensure  => present,
+		source  => "puppet:///modules/snort/${snort_daq}",
+		require => File["/opt/snort/${snort_archive}"],
+	}
+
+	exec { 'extract_snort' :
+		cwd	=> '/opt/snort',
+		command	=> "sudo tar zxvf ${snort_archive}",
+		require	=> File["/opt/snort/${snort_snort_daq}"],
+	}
+
+	exec { 'extract_snort_daq' :
+		cwd	=> '/opt/snort',
+		command	=> "sudo tar zxvf ${snort_daq}",
+		require	=> Exec['extract_snort'],
+	}
+	# EXTRACT END
+#FOLDER END
+
+#INSTALL BEGIN
+	#DISABLE LRO AND GRO ON ETHERNET ADAPTER
+	exec { 'disable_eth_feature1' : 
+	command	=> "echo 'post-up ethtool -K eth0 lro off' >> /etc/network/interfaces",
+	require	=> Exec['extract_snort_daq'],
+	}
+	
+	exec { 'disable_eth_feature2' : 
+	command	=> "echo 'post-up ethtool -K eth0 gro off' >> /etc/network/interfaces",
+	require	=> Exec['disable_eth_feature1'],
+	}
+	#NETORK CONFIG END
+	
+	#COMPILE SNORT DAQ AND INSTALL
+	exec { 'install_daq' : 
+		cwd		=> "/opt/snort/${snort_daq_fol}",
+		command	=> "sudo bash -c './configure && make && make install'",
+		require	=> Exec['disable_eth_feature2'],
+	}
+
+	#COMPILE SNORT AND INSTALL
+	exec { 'install_snort' : 
+		cwd		=> "/opt/snort/${snort_folder}",
+		command	=> "sudo bash -c './configure --enable-sourcefire && make && make install'",
+		require	=> Exec['install_daq'],
+	}
+	#INTALL END
+#INSTALL END END
+
+#CONFIGURING SNORT
+	#RUN COMMAND TO UPDATE SHARED LIBS
+	exec { 'update_lib' : 
+		command	=> 'sudo ldconfig',
+		require	=> Exec['update_snort'],
+	}
+	
+	#CREATE SYMLINK FOR SNORT SERVICE
+	exec { 'sym_snort' : 
+		command	=> 'sudo ln -s /usr/local/bin/snort /usr/sbin/snort',
+	}
+	
+	# CREATE SNORT USER AND GROUP
+	exec { 'sym_snort' : 
+		command	=> 'sudo useradd snort -r -s /sbin/nologin -c SNORT_IDS -g snort',
+	}
+	
+	exec { 'sym_snort' : 
+		command	=> 'sudo ln -s /usr/local/bin/snort /usr/sbin/snort',
+	}
+	# CREATE SNORT USER END
+	
+	#CREATE RESPECTIVE SNORT FOLDERS
+	file { '/opt/snort/mkdir.sh' : 
+		ensure => present,
+		source => source  => 'puppet:///modules/snort/mkdir.sh',
+	}
+	
+	exec { 'snort_mkdir' : 
+		cwd		=> '/opt/snort'
+		command	=> "sudo bash -c '/opt/snort/mkdir.sh'",
+	}
+	
+	#CREATE FOLDERS END
+	
+	# ENSURING SNORT HAS LATEST COMMUNITY SIGNATURE DEFINITIONS
+	exec { 'update_snort_download' : 
+		cwd		=> "/opt/snort/${snort_folder}",
+		command	=> 'sudo wget https://www.snort.org/rules/community',
+		require	=> Exec['install_snort'],
+	}
+
+	exec { "update_snort" : 
+		cwd		=> "/opt/snort/${snort_folder}",
+		command	=> 'sudo tar -xvfz community.tar.gz -C /etc/snort/rules',
+		require	=> Exec['update_snort_download'],
+	}
+	#UPDATE SNORT END
+	
+	#COPY CONFIG FILE FOR SNORT
+	file {'/etc/snort/snort.conf' : 
+		ensure  => present,
+		source  => 'puppet:///modules/snort/snort.conf',
+		require => Exec['install_dep'],
+	}
+	
+	#UPDATE PERMISSIONS FOR SNORT USER
+	exec { 'update_perm1' : 
+		command	=> 'sudo chown -R snort:snort /etc/snort',
+	}
+	
+	exec { "update_perm2" : 
+		command	=> "sudo chown -R snort:snort /var/log/snort",
+	}
+	
+	exec { "update_perm3" : 
+		command	=> "sudo chown -R snort:snort /usr/local/lib/snort_dynamicrules",
+	}
+	
+	#UPDATE PERMISSIONS END
+}

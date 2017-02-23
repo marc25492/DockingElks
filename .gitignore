@@ -1,0 +1,6 @@
+#Ignore all big files
+shared_master/binaries/*
+shared_agent/filebeat-5.1.1-linux-x86_64.tar.gz
+!shared_master/placeholder.txt
+
+

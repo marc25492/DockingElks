@@ -1,0 +1,1 @@
+{"virtualbox":{"/tmp/shared":{"guestpath":"/tmp/shared","hostpath":"C:/Users/Administrator/Desktop/Puppet task 2/DockingElks/shared_master","disabled":false,"__vagrantfile":true},"/vagrant":{"guestpath":"/vagrant","hostpath":"C:/Users/Administrator/Desktop/Puppet task 2/DockingElks","disabled":false,"__vagrantfile":true}}}
